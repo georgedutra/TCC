@@ -90,7 +90,7 @@ def respond(prompt: str,
 
 @timeit
 def rag_respond(question: str,
-                model_name: str = "phi3:mini",
+                model_name: str = "mistral:7b",
                 k=3):
     """Generate RAG response using cached vectorstore and model.
     

@@ -15,5 +15,5 @@ For the retrieval-augmented generation (RAG) experiments, this study utilized th
 
 ## Baseline Model
 
-For most experiments, Mistral 7B will be used as the baseline model, as it is a reliable, well-known, and widely adopted LLM. In parallel studies, I conducted tests comparing the response time and reliability of five different models. Although Mistral 7B exhibits relatively high latency, its accuracy compensates for this limitation.
+For most experiments, Mistral 7B will be used as the baseline model, as it is a reliable, well-known, and widely adopted LLM. In parallel studies, I conducted tests comparing the response time and reliability of five different models. Although Mistral 7B exhibits relatively high latency, its accuracy compensates for this limitation. For quantization tests, the Mistral 7B text quantized 4-bits and 8-bits variants will be used, both found in Ollama website.
 
