@@ -1,10 +1,10 @@
 import sys
 sys.path.append("..")  # Adiciona o diretório pai ao sys.path
 
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain.prompts import ChatPromptTemplate
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM as Ollama
 from utils.timeit import timeit
 
 INDEX_SAVE_PATH = "/disco/indexes"
