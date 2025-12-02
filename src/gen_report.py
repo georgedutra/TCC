@@ -15,7 +15,6 @@ from datetime import datetime
 from baseline_model import model as mdl
 from utils.monitor import ResourceMonitor 
 
-DIFFICULTY_LEVEL = 'hard'
 MODELS = [
     "mistral:7b",
     "mistral:7b-q8",
@@ -90,7 +89,6 @@ def delete_checkpoints(model_name, difficulty):
     except Exception as e:
         print(f"⚠ Failed to delete checkpoints: {e}")
 
-
 def get_results_path(difficulty, version=None):
     """Get the path for the results file.
     
@@ -105,7 +103,6 @@ def get_results_path(difficulty, version=None):
         return os.path.join(REPORTS_DIR, f'results_{difficulty}.csv')
     else:
         return os.path.join(REPORTS_DIR, f'results_{difficulty}_v{version}.csv')
-
 
 def find_latest_results(difficulty):
     """Find the latest results file (highest version number).
@@ -152,12 +149,10 @@ def find_latest_results(difficulty):
     
     return None, 0
 
-
 def load_existing_results(difficulty):
     """Load existing results file if it exists."""
     df, version = find_latest_results(difficulty)
     return df
-
 
 def get_next_results_path(difficulty):
     """Get the path for saving new results (next version).
@@ -168,7 +163,6 @@ def get_next_results_path(difficulty):
     _, current_version = find_latest_results(difficulty)
     next_version = current_version + 1
     return get_results_path(difficulty, next_version)
-
 
 def get_completed_models(df, model_list):
     """Check which models have already been processed in the results dataframe."""
@@ -225,6 +219,10 @@ def process_model(model_name, df_results, difficulty):
         else:
             start_index = 0
     
+    if difficulty == 'easy': k = 1
+    elif difficulty == 'medium': k = 2
+    else: k = 3
+
     monitor = ResourceMonitor()
     monitor.start()
     
@@ -242,7 +240,7 @@ def process_model(model_name, df_results, difficulty):
                 
                 try:
                     question = row['pergunta']
-                    response = mdl.rag_respond(question, model_name, 1)
+                    response = mdl.rag_respond(question, model_name, k)
                     
                     df_results.at[index, f'{model_name}_answer'] = response
                     df_results.at[index, f'{model_name}_time'] = mdl.rag_respond.last_execution_time
@@ -288,95 +286,98 @@ def process_model(model_name, df_results, difficulty):
 
 # Main execution
 if __name__ == "__main__":
-    print(f"{'='*60}")
-    print(f"BENCHMARK SUITE - {DIFFICULTY_LEVEL.upper()} DIFFICULTY")
-    print(f"{'='*60}")
-    
-    # Load and filter dataset
-    df = pd.read_csv(os.path.join(root, './data/evaluation_dataset.csv'))
-
-    # Group by 'id' and filter by number of queries related
-    if DIFFICULTY_LEVEL == 'easy':
-        df_filtered = df[df['id'].apply(lambda x: str(x).split(',')).str.len() == 1]
-    elif DIFFICULTY_LEVEL == 'medium':
-        df_filtered = df[df['id'].apply(lambda x: str(x).split(',')).str.len() == 2]
-    elif DIFFICULTY_LEVEL == 'hard':
-        df_filtered = df[df['id'].apply(lambda x: str(x).split(',')).str.len() >= 3]
-    df_questions = df_filtered.head(100)
-    
-    print(f"\nDataset size: {len(df_questions)} questions")
-    print(f"Models to test: {', '.join(MODELS)}")
-    print(f"Checkpoint interval: every {CHECKPOINT_INTERVAL} rows\n")
-    
-    # Check for existing results file
-    df_existing = load_existing_results(DIFFICULTY_LEVEL)
-    _, current_version = find_latest_results(DIFFICULTY_LEVEL)
-    
-    if df_existing is not None:
-        print(f"\nChecking progress for each model:")
-        completed_models, pending_models = get_completed_models(df_existing, MODELS)
+    for difficulty in ['easy', 'medium', 'hard']:
+        print(f"{'='*60}")
+        print(f"BENCHMARK SUITE - {difficulty.upper()} DIFFICULTY")
+        print(f"{'='*60}")
         
-        if len(completed_models) == len(MODELS):
-            print(f"\n✓ All models already completed in current results file!")
-            print(f"Starting a new run will create a new versioned results file.\n")
-            response = input("Do you want to start a fresh run? (y/N): ").strip().lower()
-            if response != 'y':
-                print("Exiting. No changes made.")
-                sys.exit(0)
-            # Start fresh with new version
-            print("Starting fresh run with new version...")
+        # Load and filter dataset
+        df = pd.read_csv(os.path.join(root, './data/evaluation_dataset.csv'))
+
+        # Group by 'id' and filter by number of queries related
+        if difficulty == 'easy':
+            df_filtered = df[df['id'].apply(lambda x: str(x).split(',')).str.len() == 1] # Easy: single query
+        elif difficulty == 'medium':
+            df_filtered = df[df['id'].apply(lambda x: str(x).split(',')).str.len() == 2] # Medium: two related queries
+        elif difficulty == 'hard':
+            df_filtered = df[df['id'].apply(lambda x: str(x).split(',')).str.len() >= 3] # Hard: three or more related queries
+    
+        # Limit to first 100 questions for benchmarking
+        df_questions = df_filtered.head(100)
+        
+        print(f"\nDataset size: {len(df_questions)} questions")
+        print(f"Models to test: {', '.join(MODELS)}")
+        print(f"Checkpoint interval: every {CHECKPOINT_INTERVAL} rows\n")
+        
+        # Check for existing results file
+        df_existing = load_existing_results(difficulty)
+        _, current_version = find_latest_results(difficulty)
+        
+        if df_existing is not None:
+            print(f"\nChecking progress for each model:")
+            completed_models, pending_models = get_completed_models(df_existing, MODELS)
+            
+            if len(completed_models) == len(MODELS):
+                print(f"\n✓ All models already completed in current results file!")
+                print(f"Starting a new run will create a new versioned results file.\n")
+                response = input("Do you want to start a fresh run? (y/N): ").strip().lower()
+                if response != 'y':
+                    print("Exiting. No changes made.")
+                    sys.exit(0)
+                # Start fresh with new version
+                print("Starting fresh run with new version...")
+                models_to_process = MODELS
+                df_results = df_questions.copy()
+            elif completed_models:
+                print(f"\n✓ Skipping {len(completed_models)} completed model(s): {', '.join(completed_models)}")
+                models_to_process = pending_models
+                df_results = df_existing
+            else:
+                models_to_process = MODELS
+                df_results = df_existing
+        else:
+            print("No existing results found. Starting from scratch.\n")
             models_to_process = MODELS
             df_results = df_questions.copy()
-        elif completed_models:
-            print(f"\n✓ Skipping {len(completed_models)} completed model(s): {', '.join(completed_models)}")
-            models_to_process = pending_models
-            df_results = df_existing
-        else:
-            models_to_process = MODELS
-            df_results = df_existing
-    else:
-        print("No existing results found. Starting from scratch.\n")
-        models_to_process = MODELS
-        df_results = df_questions.copy()
-    
-    # Determine output path (will be versioned if this is a fresh run)
-    if df_existing is None or (df_existing is not None and len(completed_models) == len(MODELS)):
-        # New run or fresh run after completion - use next version
-        output_path = get_next_results_path(DIFFICULTY_LEVEL)
-        print(f"Results will be saved to: {output_path} (new version)")
-    else:
-        # Continuing existing run - keep same path
-        if current_version == 0:
-            output_path = get_results_path(DIFFICULTY_LEVEL)
-        else:
-            output_path = get_results_path(DIFFICULTY_LEVEL, current_version)
-        print(f"Results will be updated in: {output_path}")
-    
-    # Process each pending model
-    if models_to_process:
-        print(f"\nProcessing {len(models_to_process)} model(s): {', '.join(models_to_process)}\n")
         
-        for model in models_to_process:
-            try:
-                result = process_model(model, df_results, DIFFICULTY_LEVEL)
-                if result is not None:
-                    df_results = result
-                    # Save intermediate results after each model
+        # Determine output path (will be versioned if this is a fresh run)
+        if df_existing is None or (df_existing is not None and len(completed_models) == len(MODELS)):
+            # New run or fresh run after completion - use next version
+            output_path = get_next_results_path(difficulty)
+            print(f"Results will be saved to: {output_path} (new version)")
+        else:
+            # Continuing existing run - keep same path
+            if current_version == 0:
+                output_path = get_results_path(difficulty)
+            else:
+                output_path = get_results_path(difficulty, current_version)
+            print(f"Results will be updated in: {output_path}")
+        
+        # Process each pending model
+        if models_to_process:
+            print(f"\nProcessing {len(models_to_process)} model(s): {', '.join(models_to_process)}\n")
+            
+            for model in models_to_process:
+                try:
+                    result = process_model(model, df_results, difficulty)
+                    if result is not None:
+                        df_results = result
+                        # Save intermediate results after each model
+                        df_results.to_csv(output_path, index=False)
+                        print(f"✓ Intermediate results saved to: {output_path}")
+                except KeyboardInterrupt:
+                    print("\n⚠ Benchmark interrupted by user. Progress saved.")
                     df_results.to_csv(output_path, index=False)
-                    print(f"✓ Intermediate results saved to: {output_path}")
-            except KeyboardInterrupt:
-                print("\n⚠ Benchmark interrupted by user. Progress saved.")
-                df_results.to_csv(output_path, index=False)
-                print(f"✓ Progress saved to: {output_path}")
-                break
-            except Exception as e:
-                print(f"\n✗ Skipping {model} due to error: {e}")
-                # Save progress even on error
-                df_results.to_csv(output_path, index=False)
-                continue
-    
-    # Save final combined results
-    df_results.to_csv(output_path, index=False)
-    print(f"\n{'='*60}")
-    print(f"✓ Final results saved to: {output_path}")
-    print(f"{'='*60}")
+                    print(f"✓ Progress saved to: {output_path}")
+                    break
+                except Exception as e:
+                    print(f"\n✗ Skipping {model} due to error: {e}")
+                    # Save progress even on error
+                    df_results.to_csv(output_path, index=False)
+                    continue
+        
+        # Save final combined results
+        df_results.to_csv(output_path, index=False)
+        print(f"\n{'='*60}")
+        print(f"✓ Final results saved to: {output_path}")
+        print(f"{'='*60}")

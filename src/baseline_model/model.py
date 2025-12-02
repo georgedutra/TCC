@@ -7,7 +7,9 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_ollama import OllamaLLM as Ollama
 from utils.timeit import timeit
 
-INDEX_SAVE_PATH = "/disco/indexes"
+# INDEX_SAVE_PATH = "/disco/indexes" # índice com chunk_size=7000
+INDEX_SAVE_PATH = "/disco/index_big" # índice com chunk_size=15000
+# INDEX_SAVE_PATH = "/disco/index_full" # índice sem chunking
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 # Cache global de modelos e vectorstore
@@ -91,7 +93,8 @@ def respond(prompt: str,
 @timeit
 def rag_respond(question: str,
                 model_name: str = "mistral:7b",
-                k=3):
+                k: int = 3,
+                temperature: float = 0.1):
     """Generate RAG response using cached vectorstore and model.
     
     Args:
@@ -115,7 +118,7 @@ def rag_respond(question: str,
     ])
 
     # Context is chunk_size * amount of chunks used
-    llm = get_llm(model_name, temperature=0.1, num_ctx=7000 * k) 
+    llm = get_llm(model_name, temperature=temperature, num_ctx=7000 * k) 
     chain = prompt_template | llm
 
     response = chain.invoke({
